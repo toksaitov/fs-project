@@ -115,6 +115,24 @@ described in the comments of the `fsck.krffs.c` file.
 
 3. Commit and push your repository through Git. Submit the last commit ID to
    Canvas before the deadline.
+   
+### Part #2
+
+Use the provided template `defrag.krffs.c` and finish writing the file system
+defragmentation utility. The application should move reserved blocks to the
+beginning of the disk shifting the free blocks to the right. Consequent free
+blocks must be merged. More info can be found in the comments of the `defrag.krffs.c`
+file.
+
+#### What to Submit
+
+1. In your private course repository that was given to you by the instructor
+   during the lecture, create the path `project-3/part-2/`.
+
+2. Put the `defrag.krffs.c` into the course repository.
+
+3. Commit and push your repository through Git. Submit the last commit ID to
+   Canvas before the deadline.
 
 #### Deadline
 
