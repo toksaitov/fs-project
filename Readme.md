@@ -51,21 +51,28 @@ To remove compiled files
 
    You can do the same by calling a helper script
 
-        ./create_krffs_file_system.sh
+        chmod +x create_file_system.krffs.sh
+        ./create_file_system.krffs.sh
 
 2. Mount the file system from the `file_system.krffs` file into an empty
    directory `mount_point`.
 
-        krffs file_system.krffs mount_point
+        ./krffs file_system.krffs mount_point
+
+   If the `mount_point` directory is not empty, remove the files from it.
+
+        rm -rf mount_point/*
+        rm mount_point/.gitignore
+        ./krffs file_system.krffs mount_point
 
    One useful option is to tell the program to print debug information for each
    file system operation with the `-d` flag.
 
-        krffs file_system.krffs mount_point -d
+        ./krffs file_system.krffs mount_point -d
 
    You can also check the list of all FUSE options by passing just the `-h` flag.
 
-        krffs -h
+        ./krffs -h
 
 3. Go inside the directory `mount_point`, experiment with the file system by
    creating files and writing or reading data from them. Attempt to rename or
@@ -106,30 +113,29 @@ check utility. The application should go through the file system structure and
 report about any data inconsistencies. The checks that you need to do are
 described in the comments of the `fsck.krffs.c` file.
 
-#### What to Submit
-
-1. In your private course repository that was given to you by the instructor
-   during the lecture, create the path `project-3/part-1/`.
-
-2. Put the `fsck.krffs.c` into the course repository.
-
-3. Commit and push your repository through Git. Submit the last commit ID to
-   Canvas before the deadline.
-   
 ### Part #2
 
-Use the provided template `defrag.krffs.c` and finish writing the file system
-defragmentation utility. The application should move reserved blocks to the
-beginning of the disk shifting the free blocks to the right. Consequent free
-blocks must be merged. More info can be found in the comments of the `defrag.krffs.c`
-file.
+Write code to visualize the file system structure in the same `fsck.krffs.c`
+file. You can design any output format you want as long as the output produced
+by your program is helpful to debug possible problems with the file system.
+
+#### Example output
+
+```
+[*][####][###][---][#][#][---]
+
+Legend:
+[*...] - root node
+[#...] - reserved node
+[-...] - free node
+```
 
 #### What to Submit
 
 1. In your private course repository that was given to you by the instructor
-   during the lecture, create the path `project-3/part-2/`.
+   during the lecture, create the path `project-3/`.
 
-2. Put the `defrag.krffs.c` into the course repository.
+2. Put the `fsck.krffs.c` into the course repository.
 
 3. Commit and push your repository through Git. Submit the last commit ID to
    Canvas before the deadline.
