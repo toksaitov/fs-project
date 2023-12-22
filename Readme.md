@@ -106,38 +106,19 @@ To remove compiled files
 
 ## Tasks
 
-### Part #1
-
 Use the provided template `fsck.krffs.c` and finish writing the file system
 check utility. The application should go through the file system structure and
 report about any data inconsistencies. The checks that you need to do are
 described in the comments of the `fsck.krffs.c` file.
 
-### Part #2
-
-Write code to visualize the file system structure in the same `fsck.krffs.c`
-file. You can design any output format you want as long as the output produced
-by your program is helpful to debug possible problems with the file system.
-
-#### Example output
-
-```
-[*][####][###][---][#][#][---]
-
-Legend:
-[*...] - root node
-[#...] - reserved node
-[-...] - free node
-```
-
 #### What to Submit
 
 1. In your private course repository that was given to you by the instructor
-   during the lecture, create the path `project-3/`.
+   during the lecture, create the path `project-4/`.
 
 2. Put the `fsck.krffs.c` into the course repository.
 
-3. Commit and push your repository through Git. Submit the last commit ID to
+3. Commit and push your repository through Git. Submit the last commit URL to
    Canvas before the deadline.
 
 #### Deadline
