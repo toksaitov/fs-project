@@ -7,6 +7,7 @@
 
 krffs
 mkfs.krffs
+edfs.krffs
+fsviz.krffs
 fsck.krffs
 defrag.krffs
-

@@ -42,11 +42,9 @@ int main(int argc, char **argv)
     bool has_force_option = false;
     bool has_help_option  = false;
     for (int i = 1; i < argc; ++i) {
-        if (!has_force_option ||
-                strncmp(argv[i], "-f", 2) == 0) {
+        if (!has_force_option && strncmp(argv[i], "-f", 2) == 0) {
             has_force_option = true;
-        } else if (!has_help_option ||
-                strncmp(argv[i], "-h", 2) == 0) {
+        } else if (!has_help_option && strncmp(argv[i], "-h", 2) == 0) {
             has_help_option = true;
         }
     }

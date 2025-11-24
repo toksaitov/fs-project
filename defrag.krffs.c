@@ -87,9 +87,6 @@ int main(int argc, char **argv)
     /*
         Ensure that the file system is valid by calling the file
         system check utility.
-
-        You can remove this check, if you don't have a working
-        `fsck.krffs`.
      */
 
     char command_buffer[KRFFS_COMMAND_BUFFER_LENGTH + 1];
@@ -113,7 +110,7 @@ int main(int argc, char **argv)
     int fsck_result =
         system(command_buffer);
 
-    if (fsck_result == -1 &&
+    if (fsck_result == -1 ||
             fsck_result == 127) {
         command_length =
             strlen("./"KRFFS_FILE_SYSTEM_CHECK_UTILITY_NAME);
@@ -323,7 +320,7 @@ int main(int argc, char **argv)
                                 |____________________________|
 
                 [used, 5]{     }[used, 2]{  }[free, 5]{     }
-     */
+    */
 
     // TODO
 

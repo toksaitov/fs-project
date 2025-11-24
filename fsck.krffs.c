@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <ncurses.h>
 
 #include "krffs_file_system.h"
 #include "krffs_node.h"
@@ -198,45 +199,194 @@ int main(int argc, char **argv)
     file_descriptor = -1;
 
     /*
-        Check that we have a KRFFS file system by checking the signature at the
-        beginning of the file.
+       Check that we have a KRFFS file system by checking the signature at the
+       beginning of the file.
      */
+    if (file_system.node->magic != KRFFS_File_System_Magic) {
+        fprintf(
+            stderr,
+            "The file system was not found at '%s'. "
+            "The file system was not created or the file is corrupted.\n",
+            path
+        );
 
-    // TODO
+        exit_status =
+            EXIT_FAILURE;
+
+        goto cleanup;
+    }
+
+    puts("The filesystem signature is correct.");
 
     /*
         Check that we have a root node at the beginning of the file.
      */
+    if (file_system.node->type != KRFFS_Root_Node) {
+        fprintf(
+            stderr,
+            "The root file system node was not found at '%s'. "
+            "The file system was not created or the file is corrupted.\n",
+            path
+        );
 
-    // TODO
+        exit_status =
+            EXIT_FAILURE;
+
+        goto cleanup;
+    }
+
+    puts("The filesystem has a correct root node.");
 
     /*
-        Perform file system checks by going through each metadata node and
-        analyzing it.
+       Perform file system checks by going through each metadata node and
+       analyzing it.
 
-        The following checks are performed
+       The following checks are performed
 
-            * Nodes' links are consecutive.
-            * Nodes' links are in the range of the file system space.
-            * Nodes' signatures are valid.
-            * Nodes' types are either 'Reserved' or 'Free'.
-            * The last node links to the first node.
+           * Nodes' links are consecutive.
+           * Nodes' links are in the range of the file system space.
+           * Nodes' signatures are valid.
+           * Nodes' types are either 'Reserved' or 'Free'.
+           * The last node links to the first node.
 
-        The process prints debug information for each node. It can be silenced
-        by redirecting the output to `> /dev/null`.
+       The process prints debug information for each node. It can be silenced
+       by redirecting the output to `> /dev/null`.
 
-        Parent programs can get result of the analysis by reading the exit
-        status.
+       Parent programs can get result of the analysis by reading the exit
+       status.
 
-        The following status codes are returned on error
+       The following status codes are returned on error
 
-            * Found a nonconsecutive link:                        -10
-            * Found a link leading outside the file system space: -11
-            * Found a node with an invalid signature:             -12
-            * Found a node of an unknown type:                    -13
+           * Found a nonconsecutive link:                        -10
+           * Found a link leading outside the file system space: -11
+           * Found a node with an invalid signature:             -12
+           * Found a node of an unknown type:                    -13
      */
+    struct krffs_node *previous_node =
+        file_system.node;
+    struct krffs_node *node =
+        previous_node;
 
-    // TODO
+    puts("Checking the filesystem structure...");
+
+    do {
+        if (previous_node > node) {
+            printf(
+                "- invalid link to %"PRIu64" "
+                "where base is %"PRIu64" "
+                "and limit %"PRIu64"\n"
+                "\n",
+                (uint64_t) node,
+                (uint64_t) file_system.node,
+                (uint64_t) file_system.node + file_system.size
+            );
+
+            fprintf(
+                stderr,
+                "The previous node link makes an invalid loop. "
+                "Should point to the first node. "
+                "Won't proceed.\n"
+            );
+
+            exit_status =
+                KRFFS_Invalid_Link_Error;
+
+            break;
+        }
+
+        if (!krffs_is_node_in_file_system(&file_system, node)) {
+            printf(
+                "- out of range node at %"PRIu64" "
+                "where base is %"PRIu64" "
+                "and limit %"PRIu64"\n"
+                "\n",
+                (uint64_t) node,
+                (uint64_t) file_system.node,
+                (uint64_t) file_system.node +
+                file_system.size
+            );
+
+            fprintf(
+                stderr,
+                "Found an out of range node. Won't proceed.\n"
+            );
+
+            exit_status =
+                KRFFS_Out_of_Range_Node_Error;
+
+            break;
+        }
+
+        if (node->magic != KRFFS_File_System_Magic) {
+            printf(
+                "- invalid file system signature at %"PRIu64" "
+                "in a node of type '%s'\n"
+                "\n",
+                (uint64_t) node,
+                node->type == KRFFS_Free_Node ?
+                    "free" : (node->type == KRFFS_Reserved_Node ? "reserved" : "unknown")
+            );
+
+            fprintf(
+                stderr,
+                "Found an invalid file system signature. Won't proceed.\n"
+            );
+
+            exit_status =
+                KRFFS_Invalid_Magic_Signature_Error;
+
+            break;
+        }
+
+        if (node->type == KRFFS_Root_Node) {
+            printf(
+                "* root node at position %"PRIu64"\n",
+                krffs_get_node_relative_position(&file_system, node)
+            );
+        } else if (node->type == KRFFS_Reserved_Node) {
+            printf(
+                "+ reserved node with ID %"PRIu64" at position %"PRIu64": "
+                "%"PRIu64" bytes (%"PRIu64" bytes for data) - [%s]\n",
+                node->id,
+                krffs_get_node_relative_position(&file_system, node),
+                node->size,
+                node->data_size,
+                node->name
+            );
+        } else if (node->type == KRFFS_Free_Node) {
+            printf(
+                "- free node at position %"PRIu64": %"PRIu64" bytes\n",
+                krffs_get_node_relative_position(&file_system, node),
+                node->size
+            );
+        } else {
+            printf(
+                "- unknown node at position %"PRIu64"\n"
+                "\n",
+                krffs_get_node_relative_position(&file_system, node)
+            );
+
+            fprintf(
+                stderr,
+                "Found a node of an unknown type. Won't proceed.\n"
+            );
+
+            exit_status =
+                KRFFS_Unknown_Node_Type_Error;
+
+            break;
+        }
+
+        previous_node =
+            node;
+        node =
+            krffs_get_next_node(
+                &file_system,
+                node
+            );
+    } while (node != file_system.node);
+
+    puts("The filesystem check has been completed successfully. There are no errors found.");
 
 cleanup:
     if (file_descriptor != -1) {

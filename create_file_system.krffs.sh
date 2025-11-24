@@ -19,4 +19,3 @@ COUNT=${1:-10}
 rm -i "$FILE_SYSTEM_FILE"
 dd if=/dev/zero of="$FILE_SYSTEM_FILE" bs=$BLOCK_SIZE count=$COUNT
 ./mkfs.krffs "$FILE_SYSTEM_FILE"
-
