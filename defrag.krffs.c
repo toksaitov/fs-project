@@ -133,7 +133,7 @@ int main(int argc, char **argv)
     if (fsck_result != 0) {
         fprintf(
             stderr,
-            "Failed check the file system file at '%s'.\n",
+            "Failed to check the file system file at '%s'.\n",
             path
         );
 
@@ -279,7 +279,8 @@ int main(int argc, char **argv)
 
     /*
         Defragment a file system by moving free space between used (reserved)
-        blocks toward the end.
+        blocks toward the end. Do not change the order of used (reserved)
+        blocks.
 
         Example
             node: [type, size in bytes]
@@ -322,7 +323,8 @@ int main(int argc, char **argv)
                 [used, 5]{     }[used, 2]{  }[free, 5]{     }
     */
 
-    // TODO
+    // TODO: Replace the line below with your defragmentation logic.
+    exit_status = EXIT_FAILURE;
 
 cleanup:
     if (file_descriptor != -1) {
@@ -334,7 +336,7 @@ cleanup:
         }
     }
 
-    if (file_system.node != NULL) {
+    if (file_system.node != NULL && file_system.node != (void *) -1) {
         if (krffs_unmap_file(
                 file_system.node,
                 file_system.size

@@ -1,8 +1,8 @@
-CFLAGS += -g -std=gnu99 -MMD
+CFLAGS += -g -std=gnu99 -MMD -D_FILE_OFFSET_BITS=64
 
-FUSE_CFLAGS += `pkg-config fuse --cflags` -DFUSE_USE_VERSION=26
-FUSE_LDLIBS += `pkg-config fuse --libs`
-NCURSES_LDLIBS += `pkg-config ncurses --libs`
+FUSE_PKG := $(shell pkg-config --exists fuse 2>/dev/null && echo fuse || echo fuse-t)
+FUSE_CFLAGS += `pkg-config $(FUSE_PKG) --cflags` -DFUSE_USE_VERSION=26
+FUSE_LDLIBS += `pkg-config $(FUSE_PKG) --libs`
 
 # KRFFS
 
@@ -16,7 +16,7 @@ KRFFS_OBJECTS = krffs_file_system.o     \
                 krffs.o
 KRFFS_DEPENDENCIES = $(KRFFS_OBJECTS:%.o=%.d)
 
-# MKFS.KRFFS
+# mkfs.krffs
 
 MKFS_KRFFS_TARGET  = mkfs.krffs
 MKFS_KRFFS_OBJECTS = krffs_file_system.o \
@@ -26,7 +26,7 @@ MKFS_KRFFS_OBJECTS = krffs_file_system.o \
                      mkfs.krffs.o
 MKFS_KRFFS_DEPENDENCIES = $(MKFS_KRFFS_OBJECTS:%.o=%.d)
 
-# DEFRAG.KRFFS
+# defrag.krffs
 
 DEFRAG_KRFFS_TARGET  = defrag.krffs
 DEFRAG_KRFFS_OBJECTS = krffs_file_system.o \
@@ -36,7 +36,7 @@ DEFRAG_KRFFS_OBJECTS = krffs_file_system.o \
                        defrag.krffs.o
 DEFRAG_KRFFS_DEPENDENCIES = $(DEFRAG_KRFFS_OBJECTS:%.o=%.d)
 
-# FSCK.KRFFS
+# fsck.krffs
 
 FSCK_KRFFS_TARGET  = fsck.krffs
 FSCK_KRFFS_OBJECTS = krffs_file_system.o \
@@ -46,7 +46,7 @@ FSCK_KRFFS_OBJECTS = krffs_file_system.o \
                      fsck.krffs.o
 FSCK_KRFFS_DEPENDENCIES = $(FSCK_KRFFS_OBJECTS:%.o=%.d)
 
-# FSVIZ.KRFFS
+# fsviz.krffs
 
 FSVIZ_KRFFS_TARGET  = fsviz.krffs
 FSVIZ_KRFFS_OBJECTS = krffs_file_system.o \
@@ -56,7 +56,7 @@ FSVIZ_KRFFS_OBJECTS = krffs_file_system.o \
                       fsviz.krffs.o
 FSVIZ_KRFFS_DEPENDENCIES = $(FSVIZ_KRFFS_OBJECTS:%.o=%.d)
 
-# EDFS.KRFFS
+# edfs.krffs
 
 EDFS_KRFFS_TARGET  = edfs.krffs
 EDFS_KRFFS_OBJECTS = krffs_file_system.o \
@@ -98,32 +98,31 @@ $(KRFFS_TARGET) : $(KRFFS_OBJECTS)
 $(KRFFS_OBJECTS) : %.o : %.c
 	$(CC) $(CFLAGS) $(FUSE_CFLAGS) -c $< -o $@
 
-# MKFS.KRFFS
+# mkfs.krffs
 
 $(MKFS_KRFFS_TARGET) : $(MKFS_KRFFS_OBJECTS)
 
 $(MKFS_KRFFS_OBJECTS) : %.o : %.c
 
-# DEFRAG.KRFFS
+# defrag.krffs
 
 $(DEFRAG_KRFFS_TARGET) : $(DEFRAG_KRFFS_OBJECTS)
 
 $(DEFRAG_KRFFS_OBJECTS) : %.o : %.c
 
-# FSCK.KRFFS
+# fsck.krffs
 
 $(FSCK_KRFFS_TARGET) : $(FSCK_KRFFS_OBJECTS)
 
 $(FSCK_KRFFS_OBJECTS) : %.o : %.c
 
-# FSVIZ.KRFFS
+# fsviz.krffs
 
 $(FSVIZ_KRFFS_TARGET) : $(FSVIZ_KRFFS_OBJECTS)
-	$(CC) -g -O0 $(LDFLAGS) -o $@ $^ $(LDLIBS) $(NCURSES_LDLIBS)
 
 $(FSVIZ_KRFFS_OBJECTS) : %.o : %.c
 
-# EDFS.KRFFS
+# edfs.krffs
 
 $(EDFS_KRFFS_TARGET) : $(EDFS_KRFFS_OBJECTS)
 

@@ -292,8 +292,8 @@ int krffs_read(
             uint64_t data_size =
                 node->data_size;
 
-            if (offset < data_size) {
-                if (offset + size > data_size) {
+            if ((uint64_t) offset < data_size) {
+                if ((uint64_t) offset + size > data_size) {
                     size =
                         data_size - offset;
                 }
@@ -726,14 +726,14 @@ int krffs_truncate(
                 result =
                     -ENOSPC;
             } else {
-                if (new_size > data_size) {
+                if ((uint64_t) new_size > data_size) {
                     void *base =
                         node + 1;
 
                     void *destination =
                         ((char *) base) + data_size;
                     uint64_t size =
-                        new_size - data_size;
+                        (uint64_t) new_size - data_size;
 
                     memset(
                         destination,

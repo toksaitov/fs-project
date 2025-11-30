@@ -46,9 +46,9 @@ void *krffs_map_file(
         (void *) -1;
 
     DWORD offset_high =
-        (DWORD) (offset >> 32);
+        (DWORD) ((uint64_t) offset >> 32);
     DWORD offset_low =
-        (DWORD) (offset & 0xFFFFFFFF);
+        (DWORD) ((uint64_t) offset & 0xFFFFFFFF);
 
     HANDLE file_handle =
         (HANDLE) _get_osfhandle(file_descriptor);

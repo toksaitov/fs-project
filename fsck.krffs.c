@@ -6,7 +6,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <ncurses.h>
 
 #include "krffs_file_system.h"
 #include "krffs_node.h"
@@ -398,7 +397,7 @@ cleanup:
         }
     }
 
-    if (file_system.node != NULL) {
+    if (file_system.node != NULL && file_system.node != (void *) -1) {
         if (krffs_unmap_file(
                 file_system.node,
                 file_system.size

@@ -140,7 +140,7 @@ int krffs_statfs(
     );
 
 /*
-    Functions pointers to our file system handlers that will be called by FUSE.
+    Function pointers to our file system handlers that will be called by FUSE.
  */
 static struct fuse_operations krffs_operations = {
     .getattr  = krffs_getattr,

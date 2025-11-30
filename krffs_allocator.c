@@ -408,7 +408,7 @@ void krffs_remove_reserved_node(
         size_was_changed = true;
     }
 
-    /* if neccessary, update the previous size for the next block */
+    /* if necessary, update the previous size for the next block */
     if (size_was_changed) {
         next_node =
             krffs_get_next_node(

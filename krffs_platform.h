@@ -39,8 +39,16 @@
     Platform specific file information data types.
  */
 #ifdef WINDOWS
+#ifdef FUSE_OFF_T
 #define PLATFORM_OFF_T FUSE_OFF_T
+#else
+#define PLATFORM_OFF_T long long
+#endif
+#ifdef FUSE_STAT
 #define PLATFORM_STAT FUSE_STAT
+#else
+#define PLATFORM_STAT _stat64
+#endif
 #else
 #define PLATFORM_OFF_T off_t
 #define PLATFORM_STAT stat
@@ -62,7 +70,7 @@
 #endif
 
 /*
-	Get time of day with a microsecond precision.
+    Get time of day with a microsecond precision.
  */
 void krffs_get_time_of_day(struct timeval *time_of_day);
 

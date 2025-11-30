@@ -38,9 +38,9 @@ struct timespec krffs_get_timespec_from_node_time(
 
     struct timespec time;
     time.tv_sec =
-        node_time->seconds;
+        (long) node_time->seconds;
     time.tv_nsec =
-        node_time->nanoseconds;
+        (long) node_time->nanoseconds;
 
     return time;
 }

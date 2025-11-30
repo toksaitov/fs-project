@@ -10,24 +10,27 @@ Aside from non-standard backing storage, the current implementation of the syste
 
 In this work, we hope you will
 
-* Learn about file systems on Unix systems and the concept of file system mounting.
-* Learn about basic algorithms such as linked allocation and free list to manage storage such as memory and disk space.
-* Learn about algorithms' strong and weak points, especially in terms of implementation complexity, performance, and data fragmentation.
-* Learn about the concept of internal and external fragmentation.
-* Learn about the power of the virtual memory subsystem to isolate or extend process memory, or abstract disk access through mapping functions such as `mmap`.
-* Learn about the most common Unix system calls to work with files.
+* Learn about the concept of file systems.
+* Learn about popular contemporary file systems.
+* Learn about file system mounting on Unix.
+* Learn about fundamental algorithms such as linked allocation and data structures like free lists for managing storage, including memory and disk space.
+* Learn about the strengths and weaknesses of these approaches, particularly regarding implementation complexity, performance, and data fragmentation.
+* Learn about the concepts of internal and external fragmentation.
+* Learn about the role of the virtual memory subsystem in isolating and extending process memory.
+* Learn about the ability of the virtual memory subsystem to abstract disk access through mapping functions such as `mmap`.
+* Learn about the most common Unix system calls for working with files.
 * Learn about FUSE and how to implement file system drivers in userspace.
-* Learn about the strong and weak sides of userspace drivers in terms of convenience, safety, and performance implications.
+* Learn about the strengths and weaknesses of userspace drivers in terms of convenience, safety, and performance.
 
 ## Required Tools
 
-On your machine, you will need a GNU/Linux environment with basic Unix command-line utilities (ensure you have `dd` installed), GCC or Clang compilers, GNU Make, and most importantly FUSE libraries, headers, and utilities. If you want to work on your machine, use your OS distribution's package manager to install FUSE, Ncurses, and pkg-config libraries with development files and utilities. Connect to our course server if you want an environment where all the prerequisites are already installed. You may also find the usual tools such as `ssh` with `scp` and `git` useful for transferring files between the server and your personal machine or submitting results to your GitHub repository provided by the instructor.
+On your machine, you will need a GNU/Linux environment with basic Unix command-line utilities (ensure you have `dd` installed), GCC or Clang compilers, GNU Make, and most importantly FUSE libraries, headers, and utilities. If you want to work on your machine, use your OS distribution's package manager to install FUSE and pkg-config libraries with development files and utilities. Connect to our course server if you want an environment where all the prerequisites are already installed. You may also find the usual tools such as `ssh` with `scp` and `git` useful for transferring files between the server and your personal machine or submitting results to your GitHub repository provided by the instructor.
 
-It is theoretically possible to work on macOS and Windows as well. On macOS, students will have to install [macFUSE](https://macfuse.github.io), and Windows users will have to install [Dokany](https://github.com/dokan-dev/dokany/releases), a similar FUSE-like project that provides a FUSE emulation layer. We do not recommend these environments, as macOS system protections require disabling important kernel protection mechanisms to make macFUSE work, and Dokany may not support FUSE correctly and requires you to create a Visual Studio project yourself to compile the code. We strongly recommend using GNU/Linux or our course server instead.
+We strongly recommend working in a GNU/Linux environment, specifically the one available on our course server. However, it is also possible to work on macOS or Windows. macOS users will need to install [FUSE-T](https://www.fuse-t.org), and Windows users will need to install [Dokany](https://github.com/dokan-dev/dokany/releases), which provides a FUSE emulation layer. The project has been tested on the latest versions of both systems (for Windows, use the Visual Studio Solution `krffs.sln` in the `vs-dokany` directory to build), but support for these platforms is limited.
 
 ## Compilation
 
-To compile the FUSE KRFFS program and all supporting utilities (to create and check the file system), use the following command (ensure to install the prerequisites first).
+To compile the FUSE KRFFS program and all supporting utilities (to create and check the file system) on *nix platforms, use the following command (ensure to install the prerequisites first).
 
     make
 
@@ -75,6 +78,7 @@ To remove compiled files:
 
         cd mount_point
         touch hello.txt
+        ls
         echo "hello, world" > hello.txt
         cat hello.txt
         echo "bye" >> hello.txt
@@ -101,7 +105,7 @@ To remove compiled files:
 
         fusermount -u mount_point
 
-5. Visualize the file system structure with the `fsviz.krffs` program. The program uses the Ncurses library to create an interactive interface. You can scroll with arrow keys if the visualization is too wide. Press CTRL+C to exit the program.
+5. Visualize the file system structure with the `fsviz.krffs` program. The program uses the termbox2 [library](https://github.com/termbox/termbox2) to create an interactive interface. You can scroll with arrow keys if the visualization is too wide. Press CTRL+C to exit the program.
 
         ./fsviz.krffs file_system.krffs
 
@@ -124,8 +128,9 @@ Check Moodle for information regarding the deadlines.
 ### Web Resources
 
 * [FUSE, Filesystem in Userspace](https://github.com/libfuse/libfuse)
-* [FUSE for OS X](https://osxfuse.github.io)
+* [FUSE-T, FUSE for macOS](https://www.fuse-t.org)
 * [Dokany](https://github.com/dokan-dev/dokany)
+* [termbox2](https://github.com/termbox/termbox2)
 
 ### Documentation
 

@@ -6,7 +6,23 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <ncurses.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
+#endif
+
+#define TB_IMPL
+#if defined(_WIN32) || defined(WINDOWS)
+#define fileno _fileno
+#include "vendor/termbox2_win.h"
+#else
+#include "vendor/termbox2.h"
+#endif
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 #include "krffs_file_system.h"
 #include "krffs_node.h"
@@ -18,6 +34,105 @@
 #else
 #include <unistd.h>
 #endif
+
+struct viz_buffer {
+    char *data;
+    int width;
+    int height;
+};
+
+static void viz_buffer_init(
+        struct viz_buffer *buffer,
+        int width,
+        int height
+    )
+{
+    buffer->width = width;
+    buffer->height = height;
+    buffer->data = malloc((size_t) width * (size_t) height);
+    if (buffer->data) {
+        memset(buffer->data, ' ', (size_t) width * (size_t) height);
+    }
+}
+
+static void viz_buffer_free(struct viz_buffer *buffer)
+{
+    free(buffer->data);
+    buffer->data = NULL;
+    buffer->width = 0;
+    buffer->height = 0;
+}
+
+static void viz_buffer_set_char(
+        struct viz_buffer *buffer,
+        int x,
+        int y,
+        char ch
+    )
+{
+    if (x >= 0 && x < buffer->width &&
+        y >= 0 && y < buffer->height) {
+        buffer->data[y * buffer->width + x] = ch;
+    }
+}
+
+static char viz_buffer_get_char(
+        struct viz_buffer *buffer,
+        int x,
+        int y
+    )
+{
+    if (x >= 0 && x < buffer->width &&
+        y >= 0 && y < buffer->height) {
+        return buffer->data[y * buffer->width + x];
+    }
+    return ' ';
+}
+
+static void viz_buffer_print_string(
+        struct viz_buffer *buffer,
+        int x,
+        int y,
+        const char *str
+    )
+{
+    while (*str) {
+        viz_buffer_set_char(buffer, x++, y, *str++);
+    }
+}
+
+static void viz_buffer_render_to_terminal(
+        struct viz_buffer *buffer,
+        int shift_x,
+        int shift_y,
+        int screen_y_offset,
+        int screen_width,
+        int screen_height
+    )
+{
+    for (int screen_y = 0; screen_y < screen_height; ++screen_y) {
+        int buffer_y = shift_y + screen_y;
+        for (int screen_x = 0; screen_x < screen_width; ++screen_x) {
+            int buffer_x = shift_x + screen_x;
+            char ch = viz_buffer_get_char(buffer, buffer_x, buffer_y);
+            tb_set_cell(screen_x, screen_y + screen_y_offset, (uint32_t) ch, TB_DEFAULT, TB_DEFAULT);
+        }
+    }
+}
+
+static void tb_print_string(
+        int x,
+        int y,
+        const char *str,
+        int max_width
+    )
+{
+    int count = 0;
+    while (*str && count < max_width) {
+        tb_set_cell(x++, y, (uint32_t) (unsigned char) *str++, TB_DEFAULT, TB_DEFAULT);
+        ++count;
+    }
+}
 
 /*
     fsviz.krffs
@@ -37,10 +152,12 @@ int main(int argc, char **argv)
     int exit_status =
         EXIT_SUCCESS;
 
-    WINDOW *pad =
-        NULL;
-    char *output_buffer =
-        NULL;
+    struct viz_buffer buffer = {
+        .data = NULL,
+        .width = 0,
+        .height = 0
+    };
+    bool tb_initialized = false;
 
     int file_descriptor = -1;
     struct krffs_file_system file_system = {
@@ -138,7 +255,7 @@ int main(int argc, char **argv)
     /*
         Check that the file is big enough to contain a file system.
      */
-    if (file_info.st_size < sizeof(*file_system.node) * 2) {
+    if (file_info.st_size < (PLATFORM_OFF_T)(sizeof(*file_system.node) * 2)) {
         fprintf(
             stderr,
             "The file at '%s' is not big enough to contain a file system.\n",
@@ -158,13 +275,7 @@ int main(int argc, char **argv)
         file_info.st_size;
 
     /*
-        Map the file system file into memory. Changes to memory at
-        `file_system.node` after a successful call to `krffs_map_file` will be
-        written directly to a file (right away or after calls to
-        `krffs_unmap_file` or `krffs_sync_mapping`).
-
-        The kernel uses its virtual memory system to implement the memory
-        mapping.
+        Map the file system file into memory.
      */
     if ((file_system.node =
              krffs_map_file(
@@ -205,22 +316,62 @@ int main(int argc, char **argv)
     /*
         Try to visualize the file system.
      */
+    if (!has_text_option) {
+        if (tb_init() != 0) {
+            fprintf(
+                stderr,
+                "Failed to initialize the terminal interface.\n"
+            );
+
+            exit_status =
+                EXIT_FAILURE;
+
+            goto cleanup;
+        }
+        tb_initialized = true;
+    }
 
     size_t bytes_per_scr_chr =
         524288;
     size_t prev_bytes_per_scr_chr =
         0;
 
-    int window_height, window_width;
-    int pad_width;
-    int pad_shift_y = 0;
+    int window_height = 0;
+    int window_width = 0;
     int pad_shift_x = 0;
+    int viz_width = 0;
+
+    static const int H_MARGIN = 5;
+    static const int V_MARGIN = 2;
+    static const int ARROW_HEIGHT = 2;
+    static const int MAX_SCROLL_PERCENT = 90;
+    static const size_t MAX_BARS_PER_NODE = 60000;
+
+    size_t largest_node_size = 0;
+    {
+        struct krffs_node *node = file_system.node;
+        do {
+            if ((size_t) node->size > largest_node_size) {
+                largest_node_size = (size_t) node->size;
+            }
+        } while ((node =
+                    krffs_get_next_node(
+                        &file_system,
+                        node
+                    )) != file_system.node);
+    }
+
+    size_t min_bytes_per_scr_chr = largest_node_size / MAX_BARS_PER_NODE;
+    if (min_bytes_per_scr_chr < 2) {
+        min_bytes_per_scr_chr = 2;
+    }
+    size_t max_bytes_per_scr_chr = (size_t) file_system.size;
 
     for (;;) {
         if (bytes_per_scr_chr != prev_bytes_per_scr_chr) {
             prev_bytes_per_scr_chr = bytes_per_scr_chr;
+
             size_t longest_file_name = 0;
-            size_t max_node_size     = 0;
 
             struct krffs_node *node = file_system.node;
             do {
@@ -230,11 +381,6 @@ int main(int argc, char **argv)
                         longest_file_name =
                             file_name_length;
                     }
-                }
-
-                if ((size_t) node->size > max_node_size) {
-                    max_node_size =
-                        (size_t) node->size;
                 }
             } while ((node =
                         krffs_get_next_node(
@@ -270,10 +416,34 @@ int main(int argc, char **argv)
                             node
                         )) != file_system.node);
 
-            if (!initscr()) {
+            if (has_text_option) {
+                window_height = 20;
+                window_width = 80;
+            } else {
+                window_height = tb_height();
+                window_width = tb_width();
+            }
+
+            viz_width =
+                (int) bar_length + H_MARGIN * 2;
+            int buffer_width = viz_width;
+            if (buffer_width < window_width) {
+                buffer_width = window_width;
+            }
+            buffer_width += 5;
+
+            int buffer_height =
+                V_MARGIN * 2 + ARROW_HEIGHT * 4 + 3;
+            if (buffer_height < window_height) {
+                buffer_height = window_height;
+            }
+
+            viz_buffer_free(&buffer);
+            viz_buffer_init(&buffer, buffer_width, buffer_height);
+            if (!buffer.data) {
                 fprintf(
                     stderr,
-                    "Failed to create the program's UI.\n"
+                    "Failed to allocate visualization buffer.\n"
                 );
 
                 exit_status =
@@ -282,44 +452,12 @@ int main(int argc, char **argv)
                 goto cleanup;
             }
 
-            if (has_colors()) {
-                start_color();
-                use_default_colors();
-                init_pair(1, COLOR_BLACK, COLOR_WHITE);
-            }
-            noecho();
-            static const unsigned int Input_Delay = 10;
-            halfdelay(Input_Delay);
-
-            int h_margin = 5, v_margin = 2;
-            int arrow_height = 2;
             int arrow_v_dir = 1;
-            getmaxyx(stdscr, window_height, window_width);
-
-            pad_width =
-                bar_length + h_margin * 2 > window_width ?
-                    bar_length + h_margin * 2 : window_width;
-
-            pad = newpad(window_height, pad_width + 5);
-            if (!pad) {
-                fprintf(
-                    stderr,
-                    "Failed to create a UI scrollable area.\n"
-                );
-
-                exit_status =
-                    EXIT_FAILURE;
-
-                goto cleanup;
-            }
-            keypad(pad, true);
-            werase(pad);
-
-            int init_cursor_x = h_margin;
+            int init_cursor_x = H_MARGIN;
             int cursor_x = init_cursor_x;
-            int cursor_y = v_margin + arrow_height * 2;
+            int cursor_y = V_MARGIN + ARROW_HEIGHT * 2;
 
-            #define SCRATCHPAD_BUFFER_SIZE 2048
+            #define SCRATCHPAD_BUFFER_SIZE 65536
             static char scratchpad[SCRATCHPAD_BUFFER_SIZE];
 
             node = file_system.node;
@@ -334,13 +472,13 @@ int main(int argc, char **argv)
                 size_t chars_written = 0;
                 if (node->type == KRFFS_Root_Node) {
                     chars_written =
-                        snprintf(
+                        (size_t) snprintf(
                             scratchpad, sizeof(scratchpad),
                             "[* %*s]", (int) longest_file_name, "root node"
                         );
                 } else if (node->type == KRFFS_Free_Node) {
-                    chars_written +=
-                        snprintf(
+                    chars_written =
+                        (size_t) snprintf(
                             scratchpad, sizeof(scratchpad),
                             "[- %*s: ", (int) longest_file_name, "free node"
                         );
@@ -354,8 +492,8 @@ int main(int argc, char **argv)
                     strcat(scratchpad, "]");
                     chars_written += bars + 1;
                 } else if (node->type == KRFFS_Reserved_Node) {
-                    chars_written +=
-                        snprintf(
+                    chars_written =
+                        (size_t) snprintf(
                             scratchpad, sizeof(scratchpad),
                             "[# %*s: ", (int) longest_file_name, (char *) node->name
                         );
@@ -369,46 +507,46 @@ int main(int argc, char **argv)
                     strcat(scratchpad, "]");
                     chars_written += bars + 1;
                 }
-                mvwprintw(pad, cursor_y, cursor_x, "%s", scratchpad);
+                viz_buffer_print_string(&buffer, cursor_x, cursor_y, scratchpad);
                 {
                     int x = cursor_x + 1;
                     int y = cursor_y + arrow_v_dir;
-                    mvwaddch(pad, y, x, arrow_v_dir < 0 ? ACS_UARROW : ACS_DARROW);
+                    viz_buffer_set_char(&buffer, x, y, arrow_v_dir < 0 ? '^' : 'v');
                     y += arrow_v_dir;
 
                     if (next_node != file_system.node) {
-                        for (int i = 1; i < arrow_height; ++i, y += arrow_v_dir) {
-                            mvwaddch(pad, y, x, '|');
+                        for (int i = 1; i < ARROW_HEIGHT; ++i, y += arrow_v_dir) {
+                            viz_buffer_set_char(&buffer, x, y, '|');
                         }
-                        for (int i = 0; i < chars_written; ++i, ++x) {
-                            mvwaddch(pad, y, x, '-');
+                        for (size_t i = 0; i < chars_written; ++i, ++x) {
+                            viz_buffer_set_char(&buffer, x, y, '-');
                         }
-                        mvwaddch(pad, y, x, '-');
+                        viz_buffer_set_char(&buffer, x, y, '-');
                         y += -arrow_v_dir;
-                        for (int i = 0; i < arrow_height - 1; ++i, y += -arrow_v_dir) {
-                            mvwaddch(pad, y, x, '|');
+                        for (int i = 0; i < ARROW_HEIGHT - 1; ++i, y += -arrow_v_dir) {
+                            viz_buffer_set_char(&buffer, x, y, '|');
                         }
-                        mvwaddch(pad, y, x, arrow_v_dir < 0 ? ACS_DARROW : ACS_UARROW);
+                        viz_buffer_set_char(&buffer, x, y, arrow_v_dir < 0 ? 'v' : '^');
                     } else {
-                        for (int i = 1; i < arrow_height * 2; ++i, y += arrow_v_dir) {
-                            mvwaddch(pad, y, x, '|');
+                        for (int i = 1; i < ARROW_HEIGHT * 2; ++i, y += arrow_v_dir) {
+                            viz_buffer_set_char(&buffer, x, y, '|');
                         }
                         for (int i = 0; i < cursor_x - init_cursor_x + 4; ++i, --x) {
-                            mvwaddch(pad, y, x, '-');
+                            viz_buffer_set_char(&buffer, x, y, '-');
                         }
-                        mvwaddch(pad, y, x, '-');
+                        viz_buffer_set_char(&buffer, x, y, '-');
                         y += -arrow_v_dir;
-                        for (int i = 0; i < arrow_height * 2; ++i, y += -arrow_v_dir) {
-                            mvwaddch(pad, y, x, '|');
+                        for (int i = 0; i < ARROW_HEIGHT * 2; ++i, y += -arrow_v_dir) {
+                            viz_buffer_set_char(&buffer, x, y, '|');
                         }
-                        mvwaddch(pad, y, x++, '-');
-                        mvwaddch(pad, y, x++, '-');
-                        mvwaddch(pad, y, x++, ACS_RARROW);
+                        viz_buffer_set_char(&buffer, x++, y, '-');
+                        viz_buffer_set_char(&buffer, x++, y, '-');
+                        viz_buffer_set_char(&buffer, x++, y, '>');
                     }
 
                     arrow_v_dir = -arrow_v_dir;
                 }
-                cursor_x += chars_written;
+                cursor_x += (int) chars_written;
             } while ((node =
                         krffs_get_next_node(
                             &file_system,
@@ -420,64 +558,80 @@ int main(int argc, char **argv)
             break;
         }
 
-        wnoutrefresh(stdscr);
-        prefresh(
-            pad,
-            pad_shift_y, pad_shift_x,
-            0, 0,
-            window_height - 1, window_width - 1
-        );
-        doupdate();
+        tb_clear();
 
-        int key = wgetch(pad);
-        if (key != ERR) {
-            switch (key) {
-                case 'h':
-                case KEY_LEFT:
-                    --pad_shift_x;
-                    break;
-                case 'j':
-                case KEY_DOWN:
-                    ++pad_shift_y;
-                    break;
-                case 'k':
-                case KEY_UP:
-                    --pad_shift_y;
-                    break;
-                case 'l':
-                case KEY_RIGHT:
-                    ++pad_shift_x;
-                    break;
-                case '+':
-                    bytes_per_scr_chr *= 2;
-                    break;
-                case '_':
-                    bytes_per_scr_chr /= 2;
-                    if (bytes_per_scr_chr == 0) {
-                        bytes_per_scr_chr = 2;
-                    }
-                    break;
-                case 'q':
+        static char title[256];
+        snprintf(title, sizeof(title), "fsviz.krffs: %s", path);
+        tb_print_string(0, 0, title, window_width);
+
+        int viz_area_height = window_height - 2;
+        if (viz_area_height > 0) {
+            viz_buffer_render_to_terminal(
+                &buffer,
+                pad_shift_x, 0,
+                1,
+                window_width, viz_area_height
+            );
+        }
+
+        static const char *help =
+            "Press 'q' or 'ctrl+c' to exit. "
+            "Scroll left or right with arrow keys or 'h' and 'l'. "
+            "Scale node size with '+' or '-'.";
+        tb_print_string(0, window_height - 1, help, window_width);
+
+        tb_present();
+
+        struct tb_event event;
+        int result = tb_peek_event(&event, 100);
+        if (result == TB_OK) {
+            if (event.type == TB_EVENT_KEY) {
+                if (event.ch == 'q' || event.key == TB_KEY_CTRL_C) {
                     goto cleanup;
-            }
+                } else if (event.ch == 'h' || event.key == TB_KEY_ARROW_LEFT) {
+                    --pad_shift_x;
+                } else if (event.ch == 'l' || event.key == TB_KEY_ARROW_RIGHT) {
+                    ++pad_shift_x;
+                } else if (event.ch == '+') {
+                    bytes_per_scr_chr /= 2;
+                    if (bytes_per_scr_chr < min_bytes_per_scr_chr) {
+                        bytes_per_scr_chr = min_bytes_per_scr_chr;
+                    }
+                } else if (event.ch == '_') {
+                    bytes_per_scr_chr *= 2;
+                    if (bytes_per_scr_chr > max_bytes_per_scr_chr) {
+                        bytes_per_scr_chr = max_bytes_per_scr_chr;
+                    }
+                }
 
-            int pad_width_limit = pad_width - 5;
-            if (pad_shift_x < 0) {
-                pad_shift_x = 0;
-            } else if (pad_shift_x > pad_width_limit) {
-                pad_shift_x = pad_width_limit;
+                if (pad_shift_x < 0) {
+                    pad_shift_x = 0;
+                }
+                int scroll_limit = viz_width * MAX_SCROLL_PERCENT / 100;
+                int content_limit = viz_width - window_width;
+                int max_shift_x = scroll_limit > content_limit ?
+                    scroll_limit : content_limit;
+                if (max_shift_x < 0) {
+                    max_shift_x = 0;
+                }
+                if (pad_shift_x > max_shift_x) {
+                    pad_shift_x = max_shift_x;
+                }
+            } else if (event.type == TB_EVENT_RESIZE) {
+                window_width = event.w;
+                window_height = event.h;
             }
         }
     }
 
-    if (has_text_option && pad != NULL) {
+    if (has_text_option && buffer.data) {
         int max_y = 0;
         int max_x = 0;
 
-        for (int y = 0; y < window_height && y < 100; ++y) {
-            for (int x = 0; x < pad_width; ++x) {
-                chtype ch = mvwinch(pad, y, x);
-                if ((ch & 0xFF) != ' ') {
+        for (int y = 0; y < buffer.height; ++y) {
+            for (int x = 0; x < buffer.width; ++x) {
+                char ch = viz_buffer_get_char(&buffer, x, y);
+                if (ch != ' ') {
                     if (y > max_y) {
                         max_y = y;
                     }
@@ -488,50 +642,21 @@ int main(int argc, char **argv)
             }
         }
 
-        size_t buffer_size = (max_y + 2) * (max_x + 2);
-        output_buffer = malloc(buffer_size);
-        if (output_buffer) {
-            size_t pos = 0;
-            for (int y = 0; y <= max_y + 1; ++y) {
-                for (int x = 0; x <= max_x; ++x) {
-                    chtype ch = mvwinch(pad, y, x);
-                    char c;
-
-                    if (ch == ACS_UARROW) {
-                        c = '^';
-                    } else if (ch == ACS_DARROW) {
-                        c = 'v';
-                    } else if (ch == ACS_RARROW) {
-                        c = '>';
-                    } else {
-                        c = ch & 0xFF;
-                    }
-
-                    if (pos < buffer_size - 2) {
-                        output_buffer[pos++] = c;
-                    }
-                }
-                if (pos < buffer_size - 1) {
-                    output_buffer[pos++] = '\n';
-                }
+        for (int y = 0; y <= max_y + 1; ++y) {
+            for (int x = 0; x <= max_x; ++x) {
+                char ch = viz_buffer_get_char(&buffer, x, y);
+                putchar(ch);
             }
-            output_buffer[pos] = '\0';
+            putchar('\n');
         }
     }
 
 cleanup:
-    if (pad != NULL) {
-        delwin(pad);
-        pad = NULL;
+    if (tb_initialized) {
+        tb_shutdown();
     }
-    endwin();
 
-    if (output_buffer != NULL) {
-        printf("%s", output_buffer);
-        fflush(stdout);
-        free(output_buffer);
-        output_buffer = NULL;
-    }
+    viz_buffer_free(&buffer);
 
     if (file_descriptor != -1) {
         if (PLATFORM_PREFIX(close(file_descriptor)) == -1) {
@@ -542,7 +667,7 @@ cleanup:
         }
     }
 
-    if (file_system.node != NULL) {
+    if (file_system.node != NULL && file_system.node != (void *) -1) {
         if (krffs_unmap_file(
                 file_system.node,
                 file_system.size

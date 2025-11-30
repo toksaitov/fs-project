@@ -40,7 +40,7 @@ int main(int argc, char **argv)
     /*
         Check parameters from the command line.
 
-        Our parameters FUSE parameters
+        Our parameters | FUSE parameters
         <file>         <mount point> <FUSE options>
 
         Without the <file> parameter, pass everything untouched directly
@@ -259,7 +259,7 @@ cleanup:
         }
     }
 
-    if (file_system.node != NULL) {
+    if (file_system.node != NULL && file_system.node != (void *) -1) {
         if (krffs_unmap_file(
                 file_system.node,
                 file_system.size

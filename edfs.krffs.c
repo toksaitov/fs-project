@@ -84,10 +84,10 @@ int main(int argc, char **argv)
     char *end_ptr = NULL;
     int base = 10;
 
-    int pos;
+    uint64_t pos;
     if (argc > 2) {
         errno = 0;
-        pos = (uint64_t) strtol(argv[2], &end_ptr, base);
+        pos = (uint64_t) strtoll(argv[2], &end_ptr, base);
         if (argv[2] == end_ptr || errno != 0) {
             failed_to_parse_options = true;
         }
@@ -101,7 +101,7 @@ int main(int argc, char **argv)
             if (i + 1 < argc) {
                 errno = 0;
                 magic = (uint16_t) strtol(argv[i + 1], &end_ptr, base);
-                if (argv[i + i] == end_ptr || errno != 0) {
+                if (argv[i + 1] == end_ptr || errno != 0) {
                     failed_to_parse_options = true;
                 }
             } else {
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
             if (i + 1 < argc) {
                 errno = 0;
                 new_id = (uint64_t) strtol(argv[i + 1], &end_ptr, base);
-                if (argv[i + i] == end_ptr || errno != 0) {
+                if (argv[i + 1] == end_ptr || errno != 0) {
                     failed_to_parse_options = true;
                 }
             } else {
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
             has_set_name_option = true;
             if (i + 1 < argc) {
                 strncpy(
-                    name,
+                    (char *) name,
                     argv[i + 1],
                     KRFFS_FILE_NAME_BUFFER_SIZE
                 );
@@ -157,7 +157,7 @@ int main(int argc, char **argv)
             if (i + 1 < argc) {
                 errno = 0;
                 size = (uint64_t) strtol(argv[i + 1], &end_ptr, base);
-                if (argv[i + i] == end_ptr || errno != 0) {
+                if (argv[i + 1] == end_ptr || errno != 0) {
                     failed_to_parse_options = true;
                 }
             } else {
@@ -169,7 +169,7 @@ int main(int argc, char **argv)
             if (i + 1 < argc) {
                 errno = 0;
                 previous_node_size = (uint64_t) strtol(argv[i + 1], &end_ptr, base);
-                if (argv[i + i] == end_ptr || errno != 0) {
+                if (argv[i + 1] == end_ptr || errno != 0) {
                     failed_to_parse_options = true;
                 }
             } else {
@@ -181,7 +181,7 @@ int main(int argc, char **argv)
             if (i + 1 < argc) {
                 errno = 0;
                 data_size = (uint64_t) strtol(argv[i + 1], &end_ptr, base);
-                if (argv[i + i] == end_ptr || errno != 0) {
+                if (argv[i + 1] == end_ptr || errno != 0) {
                     failed_to_parse_options = true;
                 }
             } else {
@@ -356,7 +356,7 @@ int main(int argc, char **argv)
             if (has_set_name_option) {
                 strncpy(
                     (char *) node->name,
-                    name,
+                    (const char *) name,
                     KRFFS_FILE_NAME_BUFFER_SIZE
                 );
                 node->name[KRFFS_FILE_NAME_BUFFER_SIZE - 1] = '\0';
@@ -402,7 +402,7 @@ cleanup:
         }
     }
 
-    if (file_system.node != NULL) {
+    if (file_system.node != NULL && file_system.node != (void *) -1) {
         if (krffs_unmap_file(
                 file_system.node,
                 file_system.size
